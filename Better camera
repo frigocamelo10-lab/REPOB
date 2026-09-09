@@ -1,0 +1,154 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local blur = Lighting:FindFirstChild("CameraBlur")
+if not blur then
+	blur = Instance.new("BlurEffect")
+	blur.Name = "CameraBlur"
+	blur.Parent = Lighting
+end
+
+blur.Size = 0
+
+local character
+local humanoid
+local root
+local head
+
+local roll = 0
+local targetRoll = 0
+local bobTime = 0
+local wasFirstPerson = false
+
+local MAX_ROLL = 2.2
+local ROLL_SPEED = 7
+local BOB_SPEED = 9
+local BOB_X = 0.035
+local BOB_Y = 0.045
+local FP_OFFSET = Vector3.new(0, 0.3, 0)
+
+local function setup(char)
+	character = char
+	humanoid = char:WaitForChild("Humanoid")
+	root = char:WaitForChild("HumanoidRootPart")
+	head = char:WaitForChild("Head")
+
+	humanoid.CameraOffset = Vector3.zero
+	humanoid.AutoRotate = true
+end
+
+if player.Character then
+	setup(player.Character)
+end
+
+player.CharacterAdded:Connect(setup)
+
+local lastLook = nil
+
+RunService:BindToRenderStep("SmoothCamera", Enum.RenderPriority.Camera.Value + 1, function(dt)
+	if not character or not humanoid or not root or not head then
+		return
+	end
+
+	local cf = camera.CFrame
+	local camPos = cf.Position
+	local distance = (camPos - head.Position).Magnitude
+	local firstPerson = distance < 1.5
+
+	if firstPerson ~= wasFirstPerson then
+		wasFirstPerson = firstPerson
+		lastLook = nil
+
+		if firstPerson then
+			humanoid.AutoRotate = false
+			humanoid.CameraOffset = FP_OFFSET
+		else
+			humanoid.AutoRotate = true
+			humanoid.CameraOffset = Vector3.zero
+		end
+	end
+
+	if firstPerson then
+		local look = cf.LookVector
+		local flat = Vector3.new(look.X, 0, look.Z)
+
+		if flat.Magnitude > 0.001 then
+			local yaw = math.atan2(-flat.X, -flat.Z)
+			local current = root.CFrame
+			local pos = current.Position
+
+			root.CFrame = CFrame.new(pos) * CFrame.Angles(0, yaw, 0)
+		end
+
+		local move = humanoid.MoveDirection
+
+		if move.Magnitude > 0.05 then
+			bobTime += dt * BOB_SPEED * (0.8 + move.Magnitude)
+
+			local right = cf.RightVector
+			local forward = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+
+			if forward.Magnitude > 0 then
+				forward = forward.Unit
+			end
+
+			local side = move:Dot(right)
+			local front = move:Dot(forward)
+
+			targetRoll = math.clamp(-side * 1.5 - front * 0.25, -MAX_ROLL, MAX_ROLL)
+
+			local bobX = math.sin(bobTime * 0.5) * BOB_X
+			local bobY = math.abs(math.cos(bobTime)) * BOB_Y
+
+			roll += (targetRoll - roll) * math.min(dt * ROLL_SPEED, 1)
+
+			camera.CFrame =
+				cf
+				* CFrame.new(bobX, bobY, 0)
+				* CFrame.Angles(0, 0, math.rad(math.clamp(roll, -MAX_ROLL, MAX_ROLL)))
+
+			blur.Size = math.min(0.8, blur.Size + dt * 3)
+		else
+			bobTime = 0
+			targetRoll = 0
+			roll += (targetRoll - roll) * math.min(dt * ROLL_SPEED, 1)
+
+			camera.CFrame =
+				cf
+				* CFrame.Angles(0, 0, math.rad(math.clamp(roll, -MAX_ROLL, MAX_ROLL)))
+
+			blur.Size = math.max(0, blur.Size - dt * 4)
+		end
+	else
+		humanoid.AutoRotate = true
+		humanoid.CameraOffset = Vector3.zero
+
+		if lastLook then
+			local a = lastLook.LookVector
+			local b = cf.LookVector
+
+			local delta = math.atan2(
+				a:Cross(b).Y,
+				a:Dot(b)
+			)
+
+			targetRoll = math.clamp(-delta * 7, -MAX_ROLL, MAX_ROLL)
+		else
+			targetRoll = 0
+		end
+
+		lastLook = cf
+
+		roll += (targetRoll - roll) * math.min(dt * ROLL_SPEED, 1)
+
+		camera.CFrame =
+			cf
+			* CFrame.Angles(0, 0, math.rad(math.clamp(roll, -MAX_ROLL, MAX_ROLL)))
+
+		blur.Size = math.max(0, blur.Size - dt * 5)
+	end
+end)
