@@ -1,0 +1,357 @@
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
+local UIS = game:GetService("UserInputService")
+
+local plr = Players.LocalPlayer
+local gui = Instance.new("ScreenGui")
+gui.Name = "PosterizationGui"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = plr:WaitForChild("PlayerGui")
+
+local palettes = {
+	{"2-bit", 8189.486},
+	{"4-bit", 5159.053},
+	{"6-bit", 3250.000},
+	{"8-bit", 2047.372},
+	{"12-bit", 812.500},
+	{"16-bit", 322.441},
+	{"24-bit", 50.781},
+	{"32-bit", 7.998},
+	{"48-bit", 0.198}
+}
+
+local open = Instance.new("TextButton")
+open.Parent = gui
+open.Position = UDim2.fromScale(0.012, 0.012)
+open.Size = UDim2.fromScale(0.055, 0.055)
+open.BackgroundColor3 = Color3.fromRGB(20,20,24)
+open.BorderSizePixel = 0
+open.Text = "P"
+open.TextColor3 = Color3.fromRGB(235,235,240)
+open.TextScaled = true
+open.Font = Enum.Font.GothamBold
+open.AutoButtonColor = false
+open.ZIndex = 100
+
+local oc = Instance.new("UICorner")
+oc.CornerRadius = UDim.new(0,7)
+oc.Parent = open
+
+local os = Instance.new("UIStroke")
+os.Parent = open
+os.Color = Color3.fromRGB(75,75,85)
+os.Thickness = 1
+os.Transparency = .25
+
+local shadow = Instance.new("Frame")
+shadow.Parent = gui
+shadow.AnchorPoint = Vector2.new(.5,.5)
+shadow.Position = UDim2.fromScale(.5,.5)
+shadow.Size = UDim2.fromScale(.47,.6)
+shadow.BackgroundColor3 = Color3.new(0,0,0)
+shadow.BackgroundTransparency = .55
+shadow.BorderSizePixel = 0
+shadow.Visible = false
+shadow.ZIndex = 9
+
+local sc = Instance.new("UICorner")
+sc.CornerRadius = UDim.new(0,14)
+sc.Parent = shadow
+
+local frame = Instance.new("Frame")
+frame.Parent = gui
+frame.AnchorPoint = Vector2.new(.5,.5)
+frame.Position = UDim2.fromScale(.5,.5)
+frame.Size = UDim2.fromScale(.47,.6)
+frame.BackgroundColor3 = Color3.fromRGB(17,17,21)
+frame.BorderSizePixel = 0
+frame.Visible = false
+frame.Active = true
+frame.ZIndex = 10
+
+local fc = Instance.new("UICorner")
+fc.CornerRadius = UDim.new(0,14)
+fc.Parent = frame
+
+local fs = Instance.new("UIStroke")
+fs.Parent = frame
+fs.Color = Color3.fromRGB(65,65,75)
+fs.Thickness = 1
+fs.Transparency = .25
+
+local title = Instance.new("TextLabel")
+title.Parent = frame
+title.Position = UDim2.fromScale(.07,.045)
+title.Size = UDim2.fromScale(.7,.09)
+title.BackgroundTransparency = 1
+title.Text = "Posterization"
+title.TextColor3 = Color3.fromRGB(245,245,248)
+title.TextScaled = true
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.GothamBold
+title.ZIndex = 12
+
+local sub = Instance.new("TextLabel")
+sub.Parent = frame
+sub.Position = UDim2.fromScale(.07,.115)
+sub.Size = UDim2.fromScale(.7,.045)
+sub.BackgroundTransparency = 1
+sub.Text = "Color palette"
+sub.TextColor3 = Color3.fromRGB(130,130,140)
+sub.TextScaled = true
+sub.TextXAlignment = Enum.TextXAlignment.Left
+sub.Font = Enum.Font.GothamMedium
+sub.ZIndex = 12
+
+local close = Instance.new("TextButton")
+close.Parent = frame
+close.AnchorPoint = Vector2.new(1,.5)
+close.Position = UDim2.fromScale(.94,.09)
+close.Size = UDim2.fromScale(.11,.08)
+close.BackgroundColor3 = Color3.fromRGB(30,30,35)
+close.BorderSizePixel = 0
+close.Text = "×"
+close.TextColor3 = Color3.fromRGB(190,190,198)
+close.TextScaled = true
+close.Font = Enum.Font.GothamMedium
+close.AutoButtonColor = false
+close.ZIndex = 13
+
+local cc = Instance.new("UICorner")
+cc.CornerRadius = UDim.new(0,7)
+cc.Parent = close
+
+local line = Instance.new("Frame")
+line.Parent = frame
+line.Position = UDim2.fromScale(.06,.18)
+line.Size = UDim2.fromScale(.88,.002)
+line.BackgroundColor3 = Color3.fromRGB(55,55,62)
+line.BorderSizePixel = 0
+line.ZIndex = 11
+
+local list = Instance.new("ScrollingFrame")
+list.Parent = frame
+list.Position = UDim2.fromScale(.055,.215)
+list.Size = UDim2.fromScale(.89,.73)
+list.BackgroundTransparency = 1
+list.BorderSizePixel = 0
+list.ScrollBarThickness = 3
+list.ScrollBarImageColor3 = Color3.fromRGB(90,90,100)
+list.CanvasSize = UDim2.fromScale(0,0)
+list.AutomaticCanvasSize = Enum.AutomaticSize.Y
+list.ZIndex = 11
+
+local layout = Instance.new("UIListLayout")
+layout.Parent = list
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(.018,0)
+
+local selected
+
+local function apply(data)
+	selected = data[1]
+
+	Lighting.FogStart = 99999
+	Lighting.FogEnd = 999999
+
+	local v = data[2] / 255
+	Lighting.FogColor = Color3.new(v,v,v)
+
+	for _,b in ipairs(list:GetChildren()) do
+		if b:IsA("TextButton") then
+			local c = b:GetAttribute("bits") == selected and Color3.fromRGB(55,55,65) or Color3.fromRGB(27,27,32)
+			TweenService:Create(b,TweenInfo.new(.15),{BackgroundColor3=c}):Play()
+		end
+	end
+end
+
+for i,data in ipairs(palettes) do
+	local b = Instance.new("TextButton")
+	b.Parent = list
+	b.Size = UDim2.new(1,0,0,48)
+	b.BackgroundColor3 = Color3.fromRGB(27,27,32)
+	b.BorderSizePixel = 0
+	b.Text = ""
+	b.AutoButtonColor = false
+	b.LayoutOrder = i
+	b.ZIndex = 12
+	b:SetAttribute("bits",data[1])
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0,9)
+	c.Parent = b
+
+	local s = Instance.new("UIStroke")
+	s.Parent = b
+	s.Color = Color3.fromRGB(50,50,58)
+	s.Thickness = 1
+	s.Transparency = .35
+
+	local name = Instance.new("TextLabel")
+	name.Parent = b
+	name.Position = UDim2.fromScale(.055,0)
+	name.Size = UDim2.fromScale(.3,1)
+	name.BackgroundTransparency = 1
+	name.Text = data[1]
+	name.TextColor3 = Color3.fromRGB(235,235,240)
+	name.TextScaled = true
+	name.TextXAlignment = Enum.TextXAlignment.Left
+	name.Font = Enum.Font.GothamBold
+	name.ZIndex = 13
+
+	local value = Instance.new("TextLabel")
+	value.Parent = b
+	value.Position = UDim2.fromScale(.36,0)
+	value.Size = UDim2.fromScale(.57,1)
+	value.BackgroundTransparency = 1
+	value.Text = string.format("%.3f",data[2])
+	value.TextColor3 = Color3.fromRGB(145,145,155)
+	value.TextScaled = true
+	value.TextXAlignment = Enum.TextXAlignment.Right
+	value.Font = Enum.Font.GothamMedium
+	value.ZIndex = 13
+
+	b.MouseEnter:Connect(function()
+		if selected ~= data[1] then
+			TweenService:Create(b,TweenInfo.new(.12),{
+				BackgroundColor3=Color3.fromRGB(38,38,44)
+			}):Play()
+		end
+	end)
+
+	b.MouseLeave:Connect(function()
+		if selected ~= data[1] then
+			TweenService:Create(b,TweenInfo.new(.12),{
+				BackgroundColor3=Color3.fromRGB(27,27,32)
+			}):Play()
+		end
+	end)
+
+	b.MouseButton1Click:Connect(function()
+		apply(data)
+
+		TweenService:Create(b,TweenInfo.new(.07),{
+			Size=UDim2.new(.97,0,0,48)
+		}):Play()
+
+		task.delay(.07,function()
+			TweenService:Create(b,TweenInfo.new(.1,Enum.EasingStyle.Back),{
+				Size=UDim2.new(1,0,0,48)
+			}):Play()
+		end)
+	end)
+end
+
+local showing = false
+local busy = false
+
+local function show()
+	if busy then return end
+	busy = true
+	showing = true
+
+	frame.Visible = true
+	shadow.Visible = true
+	frame.Size = UDim2.fromScale(.38,.48)
+	frame.BackgroundTransparency = 1
+	shadow.Size = UDim2.fromScale(.38,.48)
+	shadow.BackgroundTransparency = 1
+
+	local a = TweenService:Create(frame,TweenInfo.new(.28,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{
+		Size=UDim2.fromScale(.47,.6),
+		BackgroundTransparency=0
+	})
+
+	local b = TweenService:Create(shadow,TweenInfo.new(.22),{
+		Size=UDim2.fromScale(.49,.62),
+		BackgroundTransparency=.55
+	})
+
+	a:Play()
+	b:Play()
+	a.Completed:Wait()
+	busy = false
+end
+
+local function hide()
+	if busy then return end
+	busy = true
+	showing = false
+
+	local a = TweenService:Create(frame,TweenInfo.new(.2,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{
+		Size=UDim2.fromScale(.38,.48),
+		BackgroundTransparency=1
+	})
+
+	local b = TweenService:Create(shadow,TweenInfo.new(.18),{
+		Size=UDim2.fromScale(.38,.48),
+		BackgroundTransparency=1
+	})
+
+	a:Play()
+	b:Play()
+	a.Completed:Wait()
+
+	frame.Visible = false
+	shadow.Visible = false
+	busy = false
+end
+
+open.MouseButton1Click:Connect(function()
+	if showing then
+		hide()
+	else
+		show()
+	end
+end)
+
+close.MouseButton1Click:Connect(hide)
+
+open.MouseEnter:Connect(function()
+	TweenService:Create(open,TweenInfo.new(.15),{
+		BackgroundColor3=Color3.fromRGB(38,38,45)
+	}):Play()
+end)
+
+open.MouseLeave:Connect(function()
+	TweenService:Create(open,TweenInfo.new(.15),{
+		BackgroundColor3=Color3.fromRGB(20,20,24)
+	}):Play()
+end)
+
+local dragging = false
+local start
+local startPos
+
+frame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		start = input.Position
+		startPos = frame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if not dragging then return end
+	if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+
+	local delta = input.Position - start
+
+	frame.Position = UDim2.new(
+		startPos.X.Scale,
+		startPos.X.Offset + delta.X,
+		startPos.Y.Scale,
+		startPos.Y.Offset + delta.Y
+	)
+
+	shadow.Position = frame.Position
+end)
