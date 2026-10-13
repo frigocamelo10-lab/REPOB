@@ -1,0 +1,185 @@
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local remote = workspace:WaitForChild("WorkspaceCom")
+    :WaitForChild("001_TrafficCones")
+    :WaitForChild("PropLOYOILK")
+    :WaitForChild("SetCurrentCFrame")
+
+-- CONFIGURAÇÕES
+local CFG = {
+    OFFSET_Y = 0.5,
+
+    -- Previsão adaptativa
+    MIN_PREDICTION = 0.025,
+    MAX_PREDICTION = 0.20,
+
+    -- Quanto mais alto, mais agressiva a antecipação
+    SPEED_MULTIPLIER = 0.0018,
+    EXTRA_OFFSET = 0.025,
+
+    -- Suavização da velocidade estimada
+    VELOCITY_SMOOTHING = 18,
+
+    -- Redução progressiva da previsão ao parar
+    STOP_SPEED = 0.8,
+
+    -- Limite de deslocamento da previsão
+    MAX_LEAD_DISTANCE = 1.5,
+
+    -- Intervalo mínimo entre atualizações
+    UPDATE_INTERVAL = 0,
+
+    -- Compensação da aceleração
+    ACCELERATION_MULTIPLIER = 0.035,
+    MAX_ACCELERATION_LEAD = 0.35,
+}
+
+local lastPosition = nil
+local lastVelocity = Vector3.zero
+local smoothedVelocity = Vector3.zero
+local smoothedAcceleration = Vector3.zero
+local lastUpdate = 0
+local currentCharacter = nil
+
+local function resetPrediction()
+    lastPosition = nil
+    lastVelocity = Vector3.zero
+    smoothedVelocity = Vector3.zero
+    smoothedAcceleration = Vector3.zero
+    lastUpdate = 0
+end
+
+player.CharacterAdded:Connect(function()
+    resetPrediction()
+    currentCharacter = nil
+end)
+
+RunService.RenderStepped:Connect(function(dt)
+    if dt <= 0 then
+        return
+    end
+
+    local character = player.Character
+    local head = character and character:FindFirstChild("Head")
+
+    if not head or not head:IsA("BasePart") then
+        resetPrediction()
+        return
+    end
+
+    if character ~= currentCharacter then
+        currentCharacter = character
+        resetPrediction()
+    end
+
+    local now = os.clock()
+
+    if CFG.UPDATE_INTERVAL > 0
+        and now - lastUpdate < CFG.UPDATE_INTERVAL then
+        return
+    end
+
+    lastUpdate = now
+
+    local realPosition = head.Position
+    local rawVelocity = head.AssemblyLinearVelocity
+
+    -- Estimativa da velocidade usando também a posição observada.
+    if lastPosition then
+        local positionVelocity = (realPosition - lastPosition) / dt
+
+        -- Combina a velocidade física com a velocidade observada.
+        rawVelocity = rawVelocity:Lerp(positionVelocity, 0.35)
+    end
+
+    lastPosition = realPosition
+
+    -- Suavização independente da taxa de FPS.
+    local velocityAlpha = 1 - math.exp(
+        -CFG.VELOCITY_SMOOTHING * dt
+    )
+
+    smoothedVelocity = smoothedVelocity:Lerp(
+        rawVelocity,
+        velocityAlpha
+    )
+
+    -- Estima a aceleração para antecipar mudanças de velocidade.
+    local rawAcceleration =
+        (smoothedVelocity - lastVelocity) / dt
+
+    smoothedAcceleration = smoothedAcceleration:Lerp(
+        rawAcceleration,
+        1 - math.exp(-10 * dt)
+    )
+
+    lastVelocity = smoothedVelocity
+
+    local speed = smoothedVelocity.Magnitude
+
+    -- Ao parar, a previsão diminui até desaparecer.
+    local movementFactor = math.clamp(
+        (speed - CFG.STOP_SPEED) / 5,
+        0,
+        1
+    )
+
+    local predictionTime = math.clamp(
+        CFG.MIN_PREDICTION
+            + speed * CFG.SPEED_MULTIPLIER,
+        CFG.MIN_PREDICTION,
+        CFG.MAX_PREDICTION
+    )
+
+    predictionTime *= movementFactor
+
+    -- Offset extra proporcional à velocidade.
+    local extraTime = CFG.EXTRA_OFFSET * movementFactor
+
+    local totalTime = predictionTime + extraTime
+
+    -- Previsão da posição futura.
+    local predictedPosition =
+        realPosition + smoothedVelocity * totalTime
+
+    -- Compensação limitada da aceleração.
+    local accelerationOffset =
+        smoothedAcceleration
+        * (0.5 * totalTime * totalTime)
+        * CFG.ACCELERATION_MULTIPLIER
+
+    if accelerationOffset.Magnitude > CFG.MAX_ACCELERATION_LEAD then
+        accelerationOffset =
+            accelerationOffset.Unit * CFG.MAX_ACCELERATION_LEAD
+    end
+
+    predictedPosition += accelerationOffset
+
+    -- Limita a distância máxima da previsão.
+    local displacement = predictedPosition - realPosition
+
+    if displacement.Magnitude > CFG.MAX_LEAD_DISTANCE then
+        predictedPosition = realPosition
+            + displacement.Unit * CFG.MAX_LEAD_DISTANCE
+    end
+
+    -- Mantém o desconto vertical original.
+    local targetPosition = predictedPosition
+        - Vector3.new(0, CFG.OFFSET_Y, 0)
+
+    -- Orientação baseada na câmera, como no script original.
+    local lookVector = camera.CFrame.LookVector
+    local focusPoint = targetPosition - lookVector
+
+    local finalCFrame = CFrame.lookAt(
+        targetPosition,
+        focusPoint
+    )
+
+    remote:InvokeServer(finalCFrame)
+end)
